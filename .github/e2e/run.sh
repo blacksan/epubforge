@@ -68,6 +68,10 @@ LOGCAT=$!
 
 adb install -r app/build/outputs/apk/debug/app-debug.apk | tee -a "$OUT/steps.txt"
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
+# Simulate a punch-hole camera so the reader's header placement is tested against a cutout.
+adb shell cmd overlay enable com.android.internal.display.cutout.emulation.hole >/dev/null 2>&1 || true
+sleep 2
+log "display cutout: $(adb shell dumpsys display | grep -m1 -oE 'DisplayCutout\{[^}]*\}' | head -c 200)"
 # Skip Android's one-time "Viewing full screen" tip so it doesn't cover the reader.
 adb shell settings put secure immersive_mode_confirmations confirmed || true
 adb shell wm size | tee -a "$OUT/steps.txt"
@@ -155,6 +159,18 @@ log "story screen frames in 5s idle: $(A shell dumpsys gfxinfo $PKG | grep -m1 '
 tap "Start|Resume" || { A shell input tap $((W * 83 / 100)) $((H * 90 / 100)); log "tapped FAB position"; }
 sleep 8
 shot reader_open
+bounds_of() { dump; python3 - "$1" "$OUT/ui.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+pat = re.compile(sys.argv[1])
+try:
+    for n in ET.parse(sys.argv[2]).iter("node"):
+        if pat.fullmatch(n.get("text") or "") or pat.fullmatch(n.get("content-desc") or ""):
+            print((n.get("text") or n.get("content-desc")) + " " + n.get("bounds")); break
+except Exception as e: print("dump failed", e)
+PY
+}
+log "reader header: $(bounds_of 'Chapter 1.*')"
+log "reader battery: $(bounds_of '[0-9]+%')"
 measure reader_story_idle
 reading_session reader_story_session
 adb shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot reader_next_page
