@@ -121,16 +121,27 @@ for f in $(A shell run-as $PKG sh -c 'ls files/stories/*/img/* 2>/dev/null' | tr
   log "stored image $(basename "$f"): $(python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(); print(('%dx%d' % struct.unpack('>II', d[16:24])) if d[:4]==b'\x89PNG' else '?', len(d), 'bytes')" "$OUT/img_check.bin")"
 done
 
-# Resource use: app + WebView renderer memory (PSS), frames drawn and CPU while idle for 10 s.
-measure() { # label
-  A shell dumpsys gfxinfo $PKG reset >/dev/null
-  A shell dumpsys cpuinfo >/dev/null
-  sleep 10
-  local frames=$(A shell dumpsys gfxinfo $PKG | grep -m1 'Total frames rendered' | tr -dc '0-9')
-  local app=$(A shell dumpsys meminfo $PKG | grep -m1 -E 'TOTAL PSS:|^ *TOTAL ' | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i; exit}}')
-  local web=$(A shell dumpsys meminfo | grep -iE 'sandboxed_process|webview' | grep -oE '^ *[0-9,]+K' | tr -dc '0-9\n' | awk '{s+=$1} END{print s+0}')
-  local cpu=$(A shell dumpsys cpuinfo | grep -E 'epubforge|sandboxed_process' | awk '{s+=$1} END{printf "%.1f", s}')
-  log "MEASURE $1: app_pss_kb=${app:-?} webview_pss_kb=${web:-?} frames_10s=${frames:-?} cpu_pct=${cpu:-?}"
+# Resource use. CPU is the exact CPU time (kernel ticks, 10 ms each) used by the app and its WebView
+# renderer; memory is PSS from "Total PSS by process" (the renderer runs as sandboxed_process).
+procs() { echo "$(A shell pidof $PKG | tr -d '\r') $(A shell ps -A -o PID,NAME | grep sandboxed_process | awk '{print $1}' | tr '\n' ' ')"; }
+cpu_ticks() {
+  local t=0 v p
+  for p in $(procs); do v=$(A shell cat /proc/$p/stat 2>/dev/null | awk '{print $14+$15}'); t=$((t + ${v:-0})); done
+  echo $t
+}
+mem_kb() { # regex of process names -> summed PSS in KB
+  A shell dumpsys meminfo | awk '/Total PSS by process/{f=1;next} f&&/^ *$/{exit} f' | grep -E "$1" \
+    | sed -E 's/^ *([0-9,]+)K.*/\1/' | tr -d ',' | awk '{s+=$1} END{print s+0}'
+}
+measure() { # label: 10 s idle
+  local c0=$(cpu_ticks); sleep 10; local c1=$(cpu_ticks)
+  log "MEASURE $1: idle_cpu_ms_10s=$(( (c1 - c0) * 10 )) app_pss_kb=$(mem_kb 'com\.epubforge') renderer_pss_kb=$(mem_kb 'sandboxed_process')"
+}
+reading_session() { # label: a page every 2 s for a minute
+  local c0=$(cpu_ticks)
+  for i in $(seq 1 30); do A shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; done
+  local c1=$(cpu_ticks)
+  log "MEASURE $1: reading_30_pages_cpu_ms=$(( (c1 - c0) * 10 )) app_pss_kb=$(mem_kb 'com\.epubforge') renderer_pss_kb=$(mem_kb 'sandboxed_process')"
 }
 measure library_idle
 
@@ -145,6 +156,7 @@ tap "Start|Resume" || { A shell input tap $((W * 83 / 100)) $((H * 90 / 100)); l
 sleep 8
 shot reader_open
 measure reader_story_idle
+reading_session reader_story_session
 adb shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot reader_next_page
 adb shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot reader_next_page2
 adb shell input keyevent KEYCODE_VOLUME_DOWN; sleep 2; shot reader_volume_key
@@ -277,6 +289,7 @@ open_book() { # title regex
   tap "Start|Resume" || A shell input tap $((W * 83 / 100)) $((H * 90 / 100))
   sleep 8; shot "book_reader_$2"
   measure "reader_$2_idle"
+  [ "$2" = epub ] && reading_session reader_epub_session
   A shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot "book_reader_$2_next"
   A shell input tap $((W / 2)) $((H / 2)); sleep 2; shot "book_reader_$2_controls"
   tap "Chapters" && { sleep 2; shot "book_contents_$2"; A shell input keyevent KEYCODE_BACK; sleep 1; }

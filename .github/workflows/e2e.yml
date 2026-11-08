@@ -7,6 +7,10 @@ on:
         description: Story link to test with
         required: false
         default: http://10.0.2.2:8000/index.html
+      app_ref:
+        description: Build the app from this commit (tests stay current), e.g. to measure an older version
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -17,6 +21,13 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use app sources from another commit
+        if: inputs.app_ref != ''
+        run: |
+          git fetch --depth 1 origin "${{ inputs.app_ref }}"
+          git checkout FETCH_HEAD -- app/
+          git log -1 --format='App sources from %h %s' FETCH_HEAD
 
       - uses: actions/setup-java@v4
         with:
