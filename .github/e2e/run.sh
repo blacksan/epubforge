@@ -115,6 +115,19 @@ log "story id: $SID"
 adb shell run-as $PKG ls -la files/stories/$SID files/stories/$SID/ch files/stories/$SID/img > "$OUT/files.txt" 2>&1
 A shell run-as $PKG sh -c "head -c 3000 files/stories/$SID/ch/\$(ls files/stories/$SID/ch | head -1)" > "$OUT/chapter_sample.xhtml" 2>&1
 
+# Resource use: app + WebView renderer memory (PSS), frames drawn and CPU while idle for 10 s.
+measure() { # label
+  A shell dumpsys gfxinfo $PKG reset >/dev/null
+  A shell dumpsys cpuinfo >/dev/null
+  sleep 10
+  local frames=$(A shell dumpsys gfxinfo $PKG | grep -m1 'Total frames rendered' | tr -dc '0-9')
+  local app=$(A shell dumpsys meminfo $PKG | grep -m1 -E 'TOTAL PSS:|^ *TOTAL ' | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i; exit}}')
+  local web=$(A shell dumpsys meminfo | grep -iE 'sandboxed_process|webview' | grep -oE '^ *[0-9,]+K' | tr -dc '0-9\n' | awk '{s+=$1} END{print s+0}')
+  local cpu=$(A shell dumpsys cpuinfo | grep -E 'epubforge|sandboxed_process' | awk '{s+=$1} END{printf "%.1f", s}')
+  log "MEASURE $1: app_pss_kb=${app:-?} webview_pss_kb=${web:-?} frames_10s=${frames:-?} cpu_pct=${cpu:-?}"
+}
+measure library_idle
+
 # 6. Open the story from the library (first grid cell) and start reading.
 A shell input tap $((W * 17 / 100)) $((H * 19 / 100)); sleep 3
 wait_for "Start|Resume" 30 || cp "$OUT/ui.xml" "$OUT/ui_no_start.xml"
@@ -125,6 +138,7 @@ log "story screen frames in 5s idle: $(A shell dumpsys gfxinfo $PKG | grep -m1 '
 tap "Start|Resume" || { A shell input tap $((W * 83 / 100)) $((H * 90 / 100)); log "tapped FAB position"; }
 sleep 8
 shot reader_open
+measure reader_story_idle
 adb shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot reader_next_page
 adb shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot reader_next_page2
 adb shell input keyevent KEYCODE_VOLUME_DOWN; sleep 2; shot reader_volume_key
@@ -256,6 +270,7 @@ open_book() { # title regex
   shot "book_page_$2"
   tap "Start|Resume" || A shell input tap $((W * 83 / 100)) $((H * 90 / 100))
   sleep 8; shot "book_reader_$2"
+  measure "reader_$2_idle"
   A shell input tap $((W * 9 / 10)) $((H / 2)); sleep 2; shot "book_reader_$2_next"
   A shell input tap $((W / 2)) $((H / 2)); sleep 2; shot "book_reader_$2_controls"
   tap "Chapters" && { sleep 2; shot "book_contents_$2"; A shell input keyevent KEYCODE_BACK; sleep 1; }
@@ -265,6 +280,8 @@ open_book() { # title regex
 open_book "The Keeper.s Log" epub
 open_book "sample" pdf
 A logcat -d | grep -E "DIAG ready" | tail -2 | cut -c1-300 | while read l; do log "$l"; done
+A shell input keyevent KEYCODE_HOME; sleep 5
+measure background
 
 kill $LOGCAT 2>/dev/null
 grep -E " (E|W)/(Reader|W2E|AndroidRuntime|chromium|EpubForge)|FATAL|Exception" "$OUT/logcat.txt" | head -200 > "$OUT/errors.txt"
