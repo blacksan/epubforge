@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; -webkit-tap-highlight-color: transparent; background: transparent; }
+  /* Pin the book to the window. Percentage heights resolved to 0 in Android WebView,
+     which made the engine squeeze each chapter into hundreds of invisible pages. */
+  foliate-view { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; }
+</style>
+<script>
+  // Report problems to the app instead of hanging.
+  window.addEventListener('error', function (e) {
+    // Chromium's harmless ResizeObserver warnings are not reader failures.
+    if (e.message && /ResizeObserver loop/.test(e.message)) { e.stopImmediatePropagation(); return; }
+    try { ReaderBridge.error('Script error: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'unknown')); } catch (x) {}
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    try { ReaderBridge.error('Error: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)); } catch (x) {}
+  });
+</script>
+<!-- Bare module names foliate imports (Readest resolves them in its bundler): pdf.js for PDFs, and a
+     constructable-stylesheet polyfill for fixed layouts that WebView doesn't need. -->
+<script type="importmap">{ "imports": {
+  "@pdfjs/pdf.min.mjs": "/vendor/pdfjs/pdf.mjs",
+  "construct-style-sheets-polyfill": "/assets/reader/empty.js"
+} }</script>
+<script type="module" src="polyfills.js"></script>
+<script type="module" src="reader.js" onerror="ReaderBridge.error('Could not load the reader engine')"></script>
+</head>
+<body></body>
+</html>

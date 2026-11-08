@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android backup on Android 11 and older. Same contents as the cloud backup in data_extraction_rules.xml. -->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="file" path="datastore/" />
+    <include domain="sharedpref" path="reader2.xml" />
+</full-backup-content>

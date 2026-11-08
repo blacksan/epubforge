@@ -1,0 +1,91 @@
+name: Build APK
+
+# Every push to main is built and tested. A release is published by pushing a tag like v1.2.0,
+# or by running this workflow by hand with a version number (Actions → Build APK → Run workflow).
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (e.g. 1.2.0). Leave empty for a test build.
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (inputs.version != '' && format('v{0}', inputs.version)) || format('0.0.{0}-dev', github.run_number) }}
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.version != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch latest WebToEpub
+        run: |
+          git clone --depth 1 https://github.com/dteviot/WebToEpub.git webtoepub
+          cd webtoepub
+          git rev-parse --short HEAD > plugin/w2e_commit.txt
+          npm install --omit=dev --ignore-scripts --no-audit --no-fund
+          mkdir -p plugin/@zip.js/zip.js/dist plugin/dompurify/dist
+          cp node_modules/@zip.js/zip.js/dist/zip-no-worker.min.js plugin/@zip.js/zip.js/dist/
+          cp node_modules/dompurify/dist/purify.min.js plugin/dompurify/dist/
+
+      - name: Fetch Readest's foliate-js (reader engine)
+        run: |
+          git clone --depth 1 https://github.com/readest/foliate-js.git foliate
+          git -C foliate rev-parse --short HEAD > foliate/COMMIT
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.jks
+            echo "Using release signing key"
+          else
+            echo "::warning::KEYSTORE_BASE64 secret not set; APK will be signed with a throwaway debug key"
+          fi
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: epubforge
+        run: gradle :app:testReleaseUnitTest :app:assembleRelease --stacktrace --no-daemon
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "EpubForge-${VERSION_NAME#v}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EpubForge-${{ github.run_number }}
+          path: EpubForge-*.apk
+
+      - name: Publish release
+        if: env.RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION_NAME }}
+          target_commitish: ${{ github.sha }}
+          name: EpubForge ${{ env.VERSION_NAME }}
+          generate_release_notes: true
+          files: EpubForge-*.apk

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android backup (Android 12+). Cloud backup is capped at 25 MB, so it carries the library database,
+  settings and reader preferences; downloaded chapters come along only on a direct phone-to-phone
+  transfer. Sync passwords and sign-in tokens (shared_prefs/secrets.xml) are never backed up.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="." />
+        <include domain="file" path="datastore/" />
+        <include domain="sharedpref" path="reader2.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="." />
+        <include domain="file" path="datastore/" />
+        <include domain="file" path="stories/" />
+        <include domain="sharedpref" path="reader2.xml" />
+    </device-transfer>
+</data-extraction-rules>
