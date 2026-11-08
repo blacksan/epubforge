@@ -2,14 +2,9 @@ name: Repo cleanup (one-off)
 
 # Removes everything that still points at the old, pre-release history: all releases and
 # tags, every branch except main, and old workflow runs (their logs and artifacts).
-# Run it once from Actions → "Repo cleanup (one-off)" → Run workflow, typing DELETE.
-# It deletes this file when it's done.
+# Run it once from Actions → "Repo cleanup (one-off)" → Run workflow. It deletes this file when done.
 on:
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: Type DELETE to remove all releases, tags, extra branches and old runs
-        required: true
 
 permissions:
   contents: write
@@ -17,7 +12,6 @@ permissions:
 
 jobs:
   cleanup:
-    if: github.event.inputs.confirm == 'DELETE'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
