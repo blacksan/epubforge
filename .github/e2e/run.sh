@@ -116,7 +116,7 @@ adb shell run-as $PKG ls -la files/stories/$SID files/stories/$SID/ch files/stor
 A shell run-as $PKG sh -c "head -c 3000 files/stories/$SID/ch/\$(ls files/stories/$SID/ch | head -1)" > "$OUT/chapter_sample.xhtml" 2>&1
 
 # Big images are scaled down when saved: report stored image sizes.
-for f in $(A shell run-as $PKG sh -c 'ls files/stories/*/img/* 2>/dev/null' | tr -d '\r'); do
+for f in $(A shell "run-as $PKG sh -c 'ls files/stories/*/img/*'" 2>/dev/null | tr -d '\r'); do
   A exec-out run-as $PKG cat "$f" > "$OUT/img_check.bin"
   log "stored image $(basename "$f"): $(python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(); print(('%dx%d' % struct.unpack('>II', d[16:24])) if d[:4]==b'\x89PNG' else '?', len(d), 'bytes')" "$OUT/img_check.bin")"
 done
@@ -254,7 +254,7 @@ A logcat -c
 A shell am broadcast -n $PKG/.DebugHooks -a com.epubforge.debug.RESTORE >/dev/null; sleep 8
 log "restore: $(e2e_log)"
 library_story; shot story_after_restore
-A shell run-as $PKG sh -c 'ls files/stories/*/ch | wc -l' | tee -a "$OUT/steps.txt"
+log "chapter files after restore: $(A shell "run-as $PKG sh -c 'ls files/stories/*/ch | wc -l'" | tr -d '\r')"
 
 # Android's own backup, using the emulator's local transport.
 {
