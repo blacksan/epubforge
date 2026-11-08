@@ -145,6 +145,9 @@ class ReaderActivity : ComponentActivity() {
         private const val EXTRA_STORY = "story"
         private const val EXTRA_CHAPTER = "chapter"
         private val SAFE_NAME = Regex("^[A-Za-z0-9._-]+$")
+        private const val SAVE_EVERY_MS = 30_000L
+        /** With "keep screen on", the screen may still sleep after this long without turning a page. */
+        private const val AWAKE_AFTER_LAST_TURN_MS = 5 * 60_000L
 
         fun intent(context: Context, storyId: String, chapterUrl: String? = null) =
             Intent(context, ReaderActivity::class.java).putExtra(EXTRA_STORY, storyId).putExtra(EXTRA_CHAPTER, chapterUrl)
@@ -167,6 +170,8 @@ class ReaderActivity : ComponentActivity() {
     private var startIndex = 0
     private var startFraction = 0f
     private var lastSavedAt = 0L
+    private var lastSavedIndex = -1
+    private var lastSavedHref: String? = null
     /** Imported ebook: its single chapter row, and its table of contents from the reader. */
     private var bookChapter: Chapter? = null
     private val toc = MutableStateFlow<List<TocEntry>>(emptyList())
@@ -175,7 +180,7 @@ class ReaderActivity : ComponentActivity() {
     private fun js(code: String) = runOnUiThread { webView?.evaluateJavascript(code, null) }
 
     inner class Bridge {
-        @JavascriptInterface fun settings(): String = settings.value.toJson()
+        @JavascriptInterface fun settings(): String = effectiveSettings().toJson()
 
         @JavascriptInterface fun story(): String {
             if (isBook) {
@@ -238,6 +243,7 @@ class ReaderActivity : ComponentActivity() {
         @JavascriptInterface fun openLink(href: String) { runOnUiThread { BookActions.openUrl(this@ReaderActivity, href) } }
 
         @JavascriptInterface fun tap(zone: String) {
+            runOnUiThread { stayAwake() }
             runOnUiThread {
                 when {
                     controls.value -> controls.value = false
@@ -249,6 +255,7 @@ class ReaderActivity : ComponentActivity() {
         }
 
         @JavascriptInterface fun relocate(raw: String) {
+            runOnUiThread { stayAwake() }
             val o = try { JSONObject(raw) } catch (e: Exception) { return }
             val p = Position(
                 index = o.optInt("index", -1), fraction = o.optDouble("fraction", 0.0).toFloat(),
@@ -266,7 +273,11 @@ class ReaderActivity : ComponentActivity() {
         if (isBook) {
             val chapter = bookChapter ?: return
             val now = System.currentTimeMillis()
-            if (!force && now - lastSavedAt < 1000) return
+            // Every write wakes the database and its observers; the position lives in memory and is
+            // saved on leaving the reader, on a new section, at the end, and otherwise every 30 s.
+            val sectionChanged = p.tocHref != lastSavedHref
+            if (!force && !sectionChanged && p.bookFraction < 0.995f && now - lastSavedAt < SAVE_EVERY_MS) return
+            lastSavedHref = p.tocHref
             lastSavedAt = now
             val finished = p.bookFraction >= 0.995f
             app.scope.launch {
@@ -277,8 +288,9 @@ class ReaderActivity : ComponentActivity() {
         }
         val chapter = sections.getOrNull(p.index) ?: return
         val now = System.currentTimeMillis()
-        // Save on every chapter change and when a chapter ends; otherwise at most once a second.
-        if (!p.atEnd && now - lastSavedAt < 1000) return
+        // Save on every chapter change and when a chapter ends; otherwise at most every 30 s.
+        if (!force && !p.atEnd && p.index == lastSavedIndex && now - lastSavedAt < SAVE_EVERY_MS) return
+        lastSavedIndex = p.index
         lastSavedAt = now
         lifecycleScope.launch {
             app.repo.recordReading(story.id, chapter, if (p.atEnd) 1f else p.fraction, finished = p.atEnd)
@@ -333,8 +345,23 @@ class ReaderActivity : ComponentActivity() {
         val theme = ReaderThemes.get(s.theme)
         c.isAppearanceLightStatusBars = !theme.dark
         c.isAppearanceLightNavigationBars = !theme.dark
-        if (s.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (s.keepScreenOn) stayAwake() else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    // "Keep screen on" holds the screen only while you're reading: each page turn or tap renews it,
+    // and after five idle minutes the phone's normal screen timeout applies again.
+    private val sleepAllowed = Runnable { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    private fun stayAwake() {
+        if (!settings.value.keepScreenOn) return
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.decorView.removeCallbacks(sleepAllowed)
+        window.decorView.postDelayed(sleepAllowed, AWAKE_AFTER_LAST_TURN_MS)
+    }
+
+    /** Battery saver on: no page-turn animation (each animated turn renders dozens of frames). */
+    private fun effectiveSettings(): ReaderSettings {
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        return if (pm.isPowerSaveMode) settings.value.copy(animated = false) else settings.value
     }
 
     private fun serveStoryFile(path: String): WebResourceResponse {
@@ -384,6 +411,16 @@ class ReaderActivity : ComponentActivity() {
             }
         }
         webViewClient = object : WebViewClient() {
+            // Android reclaimed the renderer (low memory, reader in the background): reopen where we were.
+            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                Log.w("Reader", "Renderer gone (crashed=${detail.didCrash()}); reopening")
+                if (webView === view) webView = null
+                view.tag = "destroyed"
+                view.destroy()
+                if (!isFinishing) recreate()
+                return true
+            }
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
                 if (url.host != ASSET_HOST) {
@@ -413,6 +450,9 @@ class ReaderActivity : ComponentActivity() {
                 (v as WebView).evaluateJavascript("window.reader && window.reader.relayout()", null)
             }
         }
+        // Let Android reclaim the page's renderer while the reader is in the background; if it does,
+        // onRenderProcessGone reopens the book where you were.
+        setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true)
         loadUrl("https://$ASSET_HOST/assets/reader/reader.html")
         webView = this
     }
@@ -466,7 +506,7 @@ class ReaderActivity : ComponentActivity() {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { createWebView(it) },
-                        onRelease = { it.destroy(); webView = null },
+                        onRelease = { if (it.tag != "destroyed") it.destroy(); webView = null },
                     )
 
                     // Header and footer, like Readest's.
@@ -704,8 +744,31 @@ class ReaderActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onResume() {
+        super.onResume()
+        webView?.onResume()
+        stayAwake()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Stops this page's timers and animations while hidden (downloads use their own WebView).
+        webView?.onPause()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_UI_HIDDEN) webView?.clearCache(false)
+    }
+
+    override fun onDestroy() {
+        window.decorView.removeCallbacks(sleepAllowed)
+        super.onDestroy()
+    }
+
     override fun onPause() {
         super.onPause()
+        if (!opened) return
         if (isBook) {
             save(position.value, force = true)
         } else if (::story.isInitialized) {

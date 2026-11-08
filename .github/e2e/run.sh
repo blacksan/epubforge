@@ -115,6 +115,12 @@ log "story id: $SID"
 adb shell run-as $PKG ls -la files/stories/$SID files/stories/$SID/ch files/stories/$SID/img > "$OUT/files.txt" 2>&1
 A shell run-as $PKG sh -c "head -c 3000 files/stories/$SID/ch/\$(ls files/stories/$SID/ch | head -1)" > "$OUT/chapter_sample.xhtml" 2>&1
 
+# Big images are scaled down when saved: report stored image sizes.
+for f in $(A shell run-as $PKG sh -c 'ls files/stories/*/img/* 2>/dev/null' | tr -d '\r'); do
+  A exec-out run-as $PKG cat "$f" > "$OUT/img_check.bin"
+  log "stored image $(basename "$f"): $(python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(); print(('%dx%d' % struct.unpack('>II', d[16:24])) if d[:4]==b'\x89PNG' else '?', len(d), 'bytes')" "$OUT/img_check.bin")"
+done
+
 # Resource use: app + WebView renderer memory (PSS), frames drawn and CPU while idle for 10 s.
 measure() { # label
   A shell dumpsys gfxinfo $PKG reset >/dev/null

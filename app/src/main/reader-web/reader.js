@@ -231,8 +231,6 @@ async function main() {
     R.progress('Opening chapter')
     await view.renderer.goTo({ index: start.index, anchor: start.fraction > 0 ? start.fraction : 0 })
     R.ready()
-    diag('ready')
-    setTimeout(() => diag('after2s'), 2000)
 }
 
 // ---------- imported ebook files (EPUB, MOBI/AZW3, FB2, CBZ, PDF)
@@ -320,7 +318,6 @@ async function openFile() {
     }
     if (!opened) await view.init({ showTextStart: false })
     R.ready()
-    diag('ready')
 }
 
 // Layout diagnostics, written to the app log (logcat tag "Reader").

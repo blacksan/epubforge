@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -134,11 +135,11 @@ fun StoryScreen(storyId: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val story by remember(storyId) { app.db.stories().observe(storyId) }.collectAsState(initial = null)
+    val story by remember(storyId) { app.db.stories().observe(storyId) }.collectAsStateWithLifecycle(initialValue = null)
     story?.takeIf { it.isLocalBook }?.let { BookDetailScreen(it, onBack); return }
-    val chapters by remember(storyId) { app.db.chapters().observe(storyId) }.collectAsState(initial = null)
-    val dlStates by app.downloads.states.collectAsState()
-    val history by remember(storyId) { app.db.history().observeFor(storyId) }.collectAsState(initial = null)
+    val chapters by remember(storyId) { app.db.chapters().observe(storyId) }.collectAsStateWithLifecycle(initialValue = null)
+    val dlStates by app.downloads.states.collectAsStateWithLifecycle()
+    val history by remember(storyId) { app.db.history().observeFor(storyId) }.collectAsStateWithLifecycle(initialValue = null)
     val snackbar = remember { SnackbarHostState() }
 
     var refreshing by remember { mutableStateOf(false) }

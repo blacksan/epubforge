@@ -11,12 +11,17 @@ W, H = 120, 60
 raw = b"".join(b"\0" + bytes([30, 90 + y, 160]) * W for y in range(H))
 png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
 open(f"{out}/pic.png", "wb").write(png)
+# A photo-sized image (3000x2000) to check that big images are scaled down when saved.
+BW, BH = 3000, 2000
+big_raw = b"".join(b"\0" + bytes([(x * 7 + y) % 256 for x in range(0, BW * 3, 3)][:1]) * 0 + bytes((x + y) % 256 for x in range(BW * 3)) for y in range(BH))
+big = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", BW, BH, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(big_raw, 6)) + chunk(b"IEND", b"")
+open(f"{out}/big.png", "wb").write(big)
 links = "\n".join(f'<li><a href="chapter-{i}.html">Chapter {i}: The Count of {i}</a></li>' for i in range(1, N + 1))
 open(f"{out}/index.html", "w").write(f"""<!doctype html><html><head><meta charset="utf-8"><title>The Lighthouse Count</title></head>
 <body><ul>{links}</ul></body></html>""")
 for i in range(1, N + 1):
     body = "".join(f"<p>{i}.{p} {para * 3}</p>" for p in range(1, 41))
-    img = '<p><img src="pic.png" alt="a picture"></p>' if i == 1 else ""
+    img = '<p><img src="pic.png" alt="a picture"></p>' if i == 1 else ('<p><img src="big.png" alt="a big picture"></p>' if i == 2 else "")
     open(f"{out}/chapter-{i}.html", "w").write(f"""<!doctype html><html><head><meta charset="utf-8"><title>Chapter {i}</title></head>
 <body><h1>Chapter {i}: The Count of {i}</h1>{img}{body}</body></html>""")
 print("site written", out)

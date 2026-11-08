@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,10 +81,10 @@ fun LibraryScreen(onOpenStory: (String) -> Unit, onAdd: () -> Unit, onImport: ()
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val items by remember { app.db.stories().observeLibrary() }.collectAsState(initial = null)
-    val settings by app.settings.flow.collectAsState()
-    val syncState by app.sync.state.collectAsState()
-    val updateState by app.updates.progress.collectAsState()
+    val items by remember { app.db.stories().observeLibrary() }.collectAsStateWithLifecycle(initialValue = null)
+    val settings by app.settings.flow.collectAsStateWithLifecycle()
+    val syncState by app.sync.state.collectAsStateWithLifecycle()
+    val updateState by app.updates.progress.collectAsStateWithLifecycle()
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var sortMenu by remember { mutableStateOf(false) }

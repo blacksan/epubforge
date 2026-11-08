@@ -144,7 +144,9 @@ class BackupManager(private val app: App) {
         }
         wm.enqueueUniquePeriodicWork(
             "auto-backup", ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<AutoBackupWorker>(s.autoBackupDays.toLong(), TimeUnit.DAYS).build(),
+            PeriodicWorkRequestBuilder<AutoBackupWorker>(s.autoBackupDays.toLong(), TimeUnit.DAYS)
+                .setConstraints(androidx.work.Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build())
+                .build(),
         )
     }
 

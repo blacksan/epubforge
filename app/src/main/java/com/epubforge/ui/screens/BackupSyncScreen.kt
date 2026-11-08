@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -72,8 +73,8 @@ fun SyncScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val s by app.settings.flow.collectAsState()
-    val state by app.sync.state.collectAsState()
+    val s by app.settings.flow.collectAsStateWithLifecycle()
+    val state by app.sync.state.collectAsStateWithLifecycle()
 
     var choice by remember(s.syncProvider) { mutableStateOf(s.syncProvider) }
     var busy by remember { mutableStateOf(false) }

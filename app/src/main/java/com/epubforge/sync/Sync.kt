@@ -115,7 +115,11 @@ class SyncManager(private val app: App) {
         }
         wm.enqueueUniquePeriodicWork(
             "sync-periodic", ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS).setConstraints(constraints()).build(),
+            PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(
+                    if (app.settings.current.syncWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED,
+                ).setRequiresBatteryNotLow(true).build())
+                .build(),
         )
     }
 

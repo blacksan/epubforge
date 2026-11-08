@@ -37,6 +37,7 @@ class Storage(context: Context) {
                 file.copyTo(dest, overwrite = true)
                 file.delete()
             }
+            ImageSlim.shrink(dest)
         }
         var html = body
         for ((name, _) in images) html = html.replace("@@IMG@@/$name", "../img/${k}_${safe(name)}")

@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -76,8 +77,8 @@ fun BookDetailScreen(story: Story, onBack: () -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val chapter by remember(story.id) { app.db.chapters().observe(story.id) }.collectAsState(initial = emptyList())
-    val history by remember(story.id) { app.db.history().observeFor(story.id) }.collectAsState(initial = null)
+    val chapter by remember(story.id) { app.db.chapters().observe(story.id) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val history by remember(story.id) { app.db.history().observeFor(story.id) }.collectAsStateWithLifecycle(initialValue = null)
     val book = chapter.firstOrNull { it.url == LocalBooks.BOOK_CHAPTER }
     val file = app.storage.bookFile(story)
     val present = file?.isFile == true

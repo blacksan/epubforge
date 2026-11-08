@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.webkit.WebView
@@ -86,7 +87,7 @@ internal fun SubScreen(title: String, onBack: () -> Unit, content: @Composable (
 
 @Composable
 fun MoreScreen(onNavigate: (String) -> Unit) {
-    val settings by LocalContext.current.app.settings.flow.collectAsState()
+    val settings by LocalContext.current.app.settings.flow.collectAsStateWithLifecycle()
     Scaffold { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -161,7 +162,7 @@ internal fun SliderRow(title: String, value: Int, range: IntRange, step: Int, la
 fun SettingsScreen(onBack: () -> Unit) {
     val app = LocalContext.current.app
     val scope = rememberCoroutineScope()
-    val s by app.settings.flow.collectAsState()
+    val s by app.settings.flow.collectAsStateWithLifecycle()
     var themeDialog by remember { mutableStateOf(false) }
     var clearCookies by remember { mutableStateOf(false) }
     var intervalDialog by remember { mutableStateOf(false) }

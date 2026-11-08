@@ -66,8 +66,14 @@ class App : Application() {
             settings.awaitLoaded()
             kotlinx.coroutines.delay(500)
             // Android's backup may have restored the database without the chapter files.
-            try {
+            // Checking every chapter file is slow on big libraries, so only do it when the database may
+            // not match the files: first launch after an install, update or Android restore. The marker
+            // lives in no_backup/, so Android's backup never brings it along.
+            val marker = java.io.File(noBackupFilesDir, "files-checked-${BuildConfig.VERSION_CODE}")
+            if (!marker.exists()) try {
                 repo.reconcileDownloads()
+                noBackupFilesDir.listFiles { f -> f.name.startsWith("files-checked-") }?.forEach { it.delete() }
+                marker.createNewFile()
                 // Covers aren't in Android's cloud backup; fetch them for stories that arrived that way.
                 val missing = db.stories().library().filter { !storage.storyDir(it.id).exists() }
                 if (missing.isNotEmpty()) launch { com.epubforge.sync.LibraryMerge(this@App).fetchMissingCovers(missing) }

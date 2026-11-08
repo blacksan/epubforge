@@ -1,5 +1,6 @@
 package com.epubforge.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -92,11 +93,11 @@ fun UpdatesScreen(onOpenStory: (String) -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val updates by remember { app.db.chapters().observeUpdates() }.collectAsState(initial = null)
-    val stories by remember { app.db.stories().observeLibrary() }.collectAsState(initial = emptyList())
+    val updates by remember { app.db.chapters().observeUpdates() }.collectAsStateWithLifecycle(initialValue = null)
+    val stories by remember { app.db.stories().observeLibrary() }.collectAsStateWithLifecycle(initialValue = emptyList())
     val byId = remember(stories) { stories.associate { it.story.id to it.story } }
-    val dl by app.downloads.states.collectAsState()
-    val progress by app.updates.progress.collectAsState()
+    val dl by app.downloads.states.collectAsStateWithLifecycle()
+    val progress by app.updates.progress.collectAsStateWithLifecycle()
 
     Scaffold(topBar = {
         TopAppBar(
@@ -183,8 +184,8 @@ fun HistoryScreen(onOpenStory: (String) -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val history by remember { app.db.history().observe() }.collectAsState(initial = null)
-    val stories by remember { app.db.stories().observeLibrary() }.collectAsState(initial = emptyList())
+    val history by remember { app.db.history().observe() }.collectAsStateWithLifecycle(initialValue = null)
+    val stories by remember { app.db.stories().observeLibrary() }.collectAsStateWithLifecycle(initialValue = emptyList())
     val byId = remember(stories) { stories.associate { it.story.id to it.story } }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -251,11 +252,11 @@ fun DownloadsScreen(onOpenStory: (String) -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
-    val queue by remember { app.db.queue().observe() }.collectAsState(initial = emptyList())
-    val states by app.downloads.states.collectAsState()
-    val status by app.downloads.status.collectAsState()
-    val challenge by app.challenges.pending.collectAsState()
-    val stories by remember { app.db.stories().observeLibrary() }.collectAsState(initial = emptyList())
+    val queue by remember { app.db.queue().observe() }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val states by app.downloads.states.collectAsStateWithLifecycle()
+    val status by app.downloads.status.collectAsStateWithLifecycle()
+    val challenge by app.challenges.pending.collectAsStateWithLifecycle()
+    val stories by remember { app.db.stories().observeLibrary() }.collectAsStateWithLifecycle(initialValue = emptyList())
     val storyById = remember(stories) { stories.associate { it.story.id to it.story } }
     var settingsFor by remember { mutableStateOf<Story?>(null) }
     var menu by remember { mutableStateOf(false) }
@@ -395,7 +396,7 @@ private fun QueueStorySheet(story: Story, onDismiss: () -> Unit) {
     val app = context.app
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
-    val logs by app.downloads.logs.collectAsState()
+    val logs by app.downloads.logs.collectAsStateWithLifecycle()
     val log = logs[story.id] ?: emptyList()
     val settings = app.settings.current
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {

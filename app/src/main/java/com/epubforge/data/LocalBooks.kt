@@ -111,7 +111,7 @@ class LocalBooks(private val app: App) {
             val meta = try { readMeta(tmp, kind) } catch (_: Exception) { BookMeta() }
             val id = UUID.randomUUID().toString()
             placeFile(id, tmp, fileName)
-            meta.cover?.let { bytes -> storage.coverFile(id).apply { parentFile?.mkdirs() }.writeBytes(bytes) }
+            meta.cover?.let { bytes -> storage.coverFile(id).apply { parentFile?.mkdirs() }.writeBytes(bytes); ImageSlim.shrinkCover(storage.coverFile(id)) }
             val story = Story(
                 id = id, url = url,
                 title = meta.title.ifBlank { titleFromFileName(name) },
@@ -157,7 +157,10 @@ class LocalBooks(private val app: App) {
         if (author.isNotBlank() && current.author.isBlank()) updated = updated.copy(author = author.trim())
         if (updated != current) db.stories().upsert(updated.copy(updatedAt = System.currentTimeMillis()))
         val coverFile = storage.coverFile(story.id)
-        if (cover != null && cover.isNotEmpty() && !coverFile.exists()) coverFile.apply { parentFile?.mkdirs() }.writeBytes(cover)
+        if (cover != null && cover.isNotEmpty() && !coverFile.exists()) {
+            coverFile.apply { parentFile?.mkdirs() }.writeBytes(cover)
+            ImageSlim.shrinkCover(coverFile)
+        }
     }
 
     private fun displayName(uri: Uri): String {

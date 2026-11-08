@@ -141,6 +141,7 @@ class Repository(private val app: App) {
             val f = storage.coverFile(story.id)
             f.parentFile?.mkdirs()
             f.writeBytes(bytes)
+            ImageSlim.shrinkCover(f)
             // Touch the story so cover images refresh.
             db.stories().get(story.id)?.let { db.stories().upsert(it.copy(lastCheckedAt = System.currentTimeMillis())) }
         } catch (e: Exception) {
