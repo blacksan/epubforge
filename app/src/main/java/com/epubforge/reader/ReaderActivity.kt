@@ -1,5 +1,17 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.epubforge.reader
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.filled.BatteryStd
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -170,6 +182,22 @@ class ReaderActivity : ComponentActivity() {
     private var startIndex = 0
     private var startFraction = 0f
     private var lastSavedAt = 0L
+    /** Space taken by the camera cutout / hidden status bar, and the bottom cutout, in dp. */
+    @Volatile private var safeTopDp = 0
+    @Volatile private var safeBottomDp = 0
+    /** Battery level (0-100, -1 unknown) and whether it's charging, for the footer. */
+    private val battery = mutableStateOf(-1 to false)
+    private val batteryReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) = updateBattery(intent)
+    }
+    private fun updateBattery(intent: Intent?) {
+        intent ?: return
+        val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+        val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+        val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        battery.value = (if (level >= 0) level * 100 / scale else -1) to charging
+    }
     private var lastSavedIndex = -1
     private var lastSavedHref: String? = null
     /** Imported ebook: its single chapter row, and its table of contents from the reader. */
@@ -361,7 +389,13 @@ class ReaderActivity : ComponentActivity() {
     /** Battery saver on: no page-turn animation (each animated turn renders dozens of frames). */
     private fun effectiveSettings(): ReaderSettings {
         val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        return if (pm.isPowerSaveMode) settings.value.copy(animated = false) else settings.value
+        val s = settings.value
+        // Keep the text clear of the camera cutout and of the header/footer that sit beside it.
+        val withInsets = s.copy(
+            marginTop = s.marginTop + safeTopDp,
+            marginBottom = s.marginBottom + safeBottomDp,
+        )
+        return if (pm.isPowerSaveMode) withInsets.copy(animated = false) else withInsets
     }
 
     private fun serveStoryFile(path: String): WebResourceResponse {
@@ -509,21 +543,46 @@ class ReaderActivity : ComponentActivity() {
                         onRelease = { if (it.tag != "destroyed") it.destroy(); webView = null },
                     )
 
+                    // The status bar is hidden while reading, but its area (and any camera cutout) still
+                    // isn't safe to draw text in: measure it even when hidden.
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val topInsets = WindowInsets.statusBarsIgnoringVisibility.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top)
+                    val bottomInsets = WindowInsets.displayCutout.only(WindowInsetsSides.Bottom)
+                    val topDp = with(density) { topInsets.getTop(this).toDp().value.roundToInt() }
+                    val bottomDp = with(density) { bottomInsets.getBottom(this).toDp().value.roundToInt() }
+                    LaunchedEffect(topDp, bottomDp) {
+                        if (topDp != safeTopDp || bottomDp != safeBottomDp) {
+                            safeTopDp = topDp
+                            safeBottomDp = bottomDp
+                            js("window.reader && reader.apply()")
+                        }
+                    }
+
                     // Header and footer, like Readest's.
                     if (!isLoading && err == null && !showControls) {
                         val headerText = if (isBook) pos.tocLabel.ifBlank { story.title } else current?.title
                         if (s.showHeader && headerText != null) Text(
                             headerText, color = fg.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp),
+                            modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(topInsets).padding(horizontal = 24.dp, vertical = 10.dp),
                         )
                         if (s.showFooter) Row(
-                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding()
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().windowInsetsPadding(bottomInsets)
                                 .padding(horizontal = 20.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             val style = fg.copy(alpha = 0.55f)
                             Text(if (pos.pages > 0) "${pos.page + 1} / ${pos.pages}" else "", color = style, fontSize = 11.sp, modifier = Modifier.weight(1f))
                             Text(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date()), color = style, fontSize = 11.sp)
+                            val (level, charging) = battery.value
+                            if (level >= 0) {
+                                Spacer(Modifier.width(10.dp))
+                                Icon(
+                                    if (charging) Icons.Filled.BatteryChargingFull else Icons.Filled.BatteryStd,
+                                    contentDescription = "Battery", tint = style,
+                                    modifier = Modifier.size(12.dp).graphicsLayer { rotationZ = 90f },
+                                )
+                                Text("$level%", color = style, fontSize = 11.sp)
+                            }
                             Text(
                                 if (isBook) "${(pos.bookFraction * 100).roundToInt()}%"
                                 else current?.let { "${it.position + 1} / ${allChapters.count { c -> !c.removed }}" } ?: "",
@@ -744,6 +803,15 @@ class ReaderActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onStart() {
+        super.onStart()
+        // The battery broadcast is sticky: registering returns the current level right away.
+        updateBattery(androidx.core.content.ContextCompat.registerReceiver(
+            this, batteryReceiver, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        ))
+    }
+
     override fun onResume() {
         super.onResume()
         webView?.onResume()
@@ -752,6 +820,7 @@ class ReaderActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        try { unregisterReceiver(batteryReceiver) } catch (_: Exception) { }
         // Stops this page's timers and animations while hidden (downloads use their own WebView).
         webView?.onPause()
     }
