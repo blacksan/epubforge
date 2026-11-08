@@ -20,26 +20,26 @@ jobs:
       - name: Delete releases
         run: |
           gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[].id' | while read id; do
-            gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id"
+            gh api -X DELETE "repos/$REPO/releases/$id" && echo "deleted release $id" || echo "could not delete release $id"
           done
 
       - name: Delete tags
         run: |
           gh api --paginate "repos/$REPO/git/matching-refs/tags" --jq '.[].ref' | while read ref; do
-            gh api -X DELETE "repos/$REPO/git/${ref#refs/}" && echo "deleted $ref"
+            gh api -X DELETE "repos/$REPO/git/$ref" && echo "deleted $ref" || echo "could not delete $ref"
           done
 
       - name: Delete branches other than main
         run: |
           gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | grep -vx main | while read b; do
-            gh api -X DELETE "repos/$REPO/git/refs/heads/$b" && echo "deleted branch $b"
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$b" && echo "deleted branch $b" || echo "could not delete branch $b"
           done
 
       - name: Delete old workflow runs
         run: |
           gh api --paginate "repos/$REPO/actions/runs?per_page=100" --jq '.workflow_runs[].id' | while read id; do
             [ "$id" = "${{ github.run_id }}" ] && continue
-            gh api -X DELETE "repos/$REPO/actions/runs/$id" >/dev/null && echo "deleted run $id"
+            gh api -X DELETE "repos/$REPO/actions/runs/$id" >/dev/null && echo "deleted run $id" || echo "could not delete run $id"
           done
 
       - uses: actions/checkout@v4
