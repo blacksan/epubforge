@@ -579,7 +579,8 @@ class ReaderActivity : ComponentActivity() {
                                 Icon(
                                     if (charging) Icons.Filled.BatteryChargingFull else Icons.Filled.BatteryStd,
                                     contentDescription = "Battery", tint = style,
-                                    modifier = Modifier.size(12.dp).graphicsLayer { rotationZ = 90f },
+                                    // Same colour as the text and sized from the text size, so it reads as part of it.
+                                    modifier = Modifier.size(with(density) { 12.sp.toDp() }).graphicsLayer { rotationZ = 90f },
                                 )
                                 Text("$level%", color = style, fontSize = 11.sp)
                             }
