@@ -186,6 +186,13 @@ private fun AppRoot(
         }
     }
     val pickBooks = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { importBooks(it) }
+
+    // Look for a newer release each time the app opens (official builds only; at most every 30 min).
+    LaunchedEffect(Unit) {
+        context.app.settings.awaitLoaded()
+        context.app.updater.check(manual = false)
+    }
+    UpdateDialog()
     LaunchedEffect(incomingFiles) {
         if (incomingFiles.isNotEmpty()) { importBooks(incomingFiles); consumeFiles() }
     }

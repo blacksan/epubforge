@@ -97,6 +97,9 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = (System.getenv("VERSION_NAME") ?: "0.0.0-dev").removePrefix("v")
+        // GitHub repository ("owner/name") whose releases the in-app updater checks. CI sets it to the
+        // repository being built; local builds, forks and store builds leave it empty (updater off).
+        buildConfigField("String", "UPDATE_REPO", "\"" + (System.getenv("UPDATE_REPO") ?: "") + "\"")
     }
 
     signingConfigs {

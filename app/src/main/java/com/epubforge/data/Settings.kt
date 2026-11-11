@@ -54,6 +54,8 @@ data class AppSettings(
     val backupIncludeChapters: Boolean = false,
     val lastBackup: Long = 0,
     val lastBackupError: String = "",
+    // In-app updates (official releases only)
+    val checkUpdates: Boolean = true,
 )
 
 /** Passwords and sign-in tokens. Kept out of settings so backups never include them. */
@@ -92,6 +94,7 @@ class SettingsStore(private val context: Context, scope: CoroutineScope) {
         val bkChapters = booleanPreferencesKey("bk_chapters")
         val bkLast = longPreferencesKey("bk_last")
         val bkErr = stringPreferencesKey("bk_err")
+        val checkUpdates = booleanPreferencesKey("check_updates")
         val lastSync = longPreferencesKey("last_sync")
         val lastErr = stringPreferencesKey("last_err")
         val lastVersion = longPreferencesKey("last_version")
@@ -137,6 +140,7 @@ class SettingsStore(private val context: Context, scope: CoroutineScope) {
         backupIncludeChapters = this[K.bkChapters] ?: false,
         lastBackup = this[K.bkLast] ?: 0,
         lastBackupError = this[K.bkErr] ?: "",
+        checkUpdates = this[K.checkUpdates] ?: true,
     )
 
     val flow: StateFlow<AppSettings> = context.dataStore.data
@@ -172,6 +176,7 @@ class SettingsStore(private val context: Context, scope: CoroutineScope) {
             p[K.bkChapters] = n.backupIncludeChapters
             p[K.bkLast] = n.lastBackup
             p[K.bkErr] = n.lastBackupError
+            p[K.checkUpdates] = n.checkUpdates
             p[K.lastSync] = n.lastSync
             p[K.lastErr] = n.lastSyncError
             p[K.lastVersion] = n.lastSyncedVersion

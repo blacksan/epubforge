@@ -24,6 +24,8 @@ jobs:
       VERSION_CODE: ${{ github.run_number }}
       VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (inputs.version != '' && format('v{0}', inputs.version)) || format('0.0.{0}-dev', github.run_number) }}
       RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.version != '' }}
+      # Releases tell the in-app updater where to look for newer versions.
+      UPDATE_REPO: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.version != '') && github.repository || '' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -327,6 +327,31 @@ fun AboutScreen(onBack: () -> Unit) {
     SubScreen("About", onBack) { mod ->
         Column(mod.verticalScroll(rememberScrollState())) {
             ListItem(headlineContent = { Text("Version") }, supportingContent = { Text(BuildConfig.VERSION_NAME) })
+            val updater = context.app.updater
+            if (updater.enabled) {
+                val app = context.app
+                val settings by app.settings.flow.collectAsStateWithLifecycle()
+                val updateState by updater.state.collectAsStateWithLifecycle()
+                val scope = rememberCoroutineScope()
+                ListItem(
+                    headlineContent = { Text("Check for updates") },
+                    supportingContent = {
+                        Text(when (val u = updateState) {
+                            is com.epubforge.update.UpdateState.Checking -> "Checking…"
+                            is com.epubforge.update.UpdateState.UpToDate -> "You have the latest version"
+                            is com.epubforge.update.UpdateState.Available -> "Version ${u.release.version} is available"
+                            is com.epubforge.update.UpdateState.Downloading -> "Downloading ${u.release.version}… ${(u.progress * 100).toInt()}%"
+                            is com.epubforge.update.UpdateState.ReadyToInstall -> "Version ${u.release.version} is ready to install"
+                            is com.epubforge.update.UpdateState.Error -> u.message
+                            else -> "Tap to check now"
+                        })
+                    },
+                    modifier = Modifier.clickable { scope.launch { updater.check(manual = true) } },
+                )
+                SwitchRow("Check when the app opens", "Looks for a newer release on GitHub", settings.checkUpdates) { v ->
+                    scope.launch { app.settings.update { it.copy(checkUpdates = v) } }
+                }
+            }
             ListItem(
                 headlineContent = { Text("WebToEpub") },
                 supportingContent = { Text("$w2eVersion${if (w2eCommit.isNotBlank()) " ($w2eCommit)" else ""} — by David Teviotdale and contributors") },

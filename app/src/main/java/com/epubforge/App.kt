@@ -31,6 +31,7 @@ class App : Application() {
     lateinit var secrets: Secrets
     lateinit var backups: BackupManager
     lateinit var books: com.epubforge.data.LocalBooks
+    lateinit var updater: com.epubforge.update.Updater
     lateinit var db: AppDatabase
     lateinit var storage: Storage
     lateinit var repo: Repository
@@ -58,6 +59,7 @@ class App : Application() {
         updates = UpdateManager(this)
         backups = BackupManager(this)
         books = com.epubforge.data.LocalBooks(this)
+        updater = com.epubforge.update.Updater(this)
         Notifications.createChannels(this)
         challenges.onChallenge = { Notifications.challenge(this, it) }
 

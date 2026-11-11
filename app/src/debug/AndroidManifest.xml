@@ -11,6 +11,7 @@
                 <action android:name="com.epubforge.debug.RESTORE" />
                 <action android:name="com.epubforge.debug.SYNC" />
                 <action android:name="com.epubforge.debug.IMPORT" />
+                <action android:name="com.epubforge.debug.CHECK_UPDATE" />
             </intent-filter>
         </receiver>
     </application>

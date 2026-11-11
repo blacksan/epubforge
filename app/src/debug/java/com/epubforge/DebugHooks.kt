@@ -35,6 +35,11 @@ class DebugHooks : BroadcastReceiver() {
                         val story = app.books.import(android.net.Uri.fromFile(f))
                         Log.i("E2E", "IMPORT OK id=${story.id} title=${story.title} author=${story.author} site=${story.site}")
                     }
+                    "com.epubforge.debug.CHECK_UPDATE" -> {
+                        // Pretend to be an old version and check a real repository's releases.
+                        val r = app.updater.check(manual = true, repoOverride = intent.getStringExtra("repo"), currentOverride = "1.0.0")
+                        Log.i("E2E", "CHECK_UPDATE OK $r")
+                    }
                     "com.epubforge.debug.SYNC" -> {
                         Log.i("E2E", "SYNC " + app.sync.syncNow().fold({ "OK" }, { "FAILED " + it.message }))
                     }

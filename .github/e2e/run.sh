@@ -315,6 +315,22 @@ open_book() { # title regex
 open_book "The Keeper.s Log" epub
 open_book "sample" pdf
 A logcat -d | grep -E "DIAG ready" | tail -2 | cut -c1-300 | while read l; do log "$l"; done
+# 11. In-app updater: pretend to be 1.0.0, find the latest real release, download it.
+if [ -n "${E2E_REPO:-}" ]; then
+  A shell am start -n $PKG/.ui.MainActivity >/dev/null; sleep 3
+  A logcat -c
+  A shell am broadcast -n $PKG/.DebugHooks -a com.epubforge.debug.CHECK_UPDATE --es repo "$E2E_REPO" >/dev/null; sleep 6
+  log "update check: $(A logcat -d -s E2E:I | grep CHECK_UPDATE | tail -1 | cut -c1-260)"
+  if wait_for "Update available" 20; then
+    shot update_available
+    tap "Update"
+    if wait_for "Ready to install|Update failed" 180; then shot update_ready; else shot update_stuck; fi
+    log "update download: $(A logcat -d | grep -E 'Updater' | tail -2 | cut -c1-220 | tr '\n' ' ')"
+    log "update file: $(A shell "run-as $PKG sh -c 'ls -l cache/updates'" | tr -d '\r' | tail -1)"
+    A shell input keyevent KEYCODE_BACK; sleep 1
+  fi
+fi
+
 A shell input keyevent KEYCODE_HOME; sleep 5
 measure background
 
