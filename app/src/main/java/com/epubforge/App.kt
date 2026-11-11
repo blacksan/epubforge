@@ -61,6 +61,9 @@ class App : Application() {
         books = com.epubforge.data.LocalBooks(this)
         updater = com.epubforge.update.Updater(this)
         Notifications.createChannels(this)
+        // A download notification left behind by an earlier version or a crash; the queue below
+        // posts a fresh one if there's still work to do.
+        Notifications.cancelWork(this)
         challenges.onChallenge = { Notifications.challenge(this, it) }
 
         scope.launch {

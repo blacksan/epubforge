@@ -305,6 +305,8 @@ object Notifications {
             .build()
     }
 
+    fun cancelWork(context: Context) = NotificationManagerCompat.from(context).cancel(ID_WORK)
+
     fun update(context: Context, s: DownloaderStatus, remaining: Int) {
         if (allowed(context)) NotificationManagerCompat.from(context).notify(ID_WORK, work(context, s, remaining))
     }
@@ -368,15 +370,25 @@ class DownloadService : LifecycleService() {
         if (!running) {
             running = true
             lifecycleScope.launch {
+                // One refresh at a time, and none once the queue is done: a refresh still in flight
+                // after the service stopped used to re-post a "0 chapters left" notification that
+                // nothing would ever remove.
+                var refresh: kotlinx.coroutines.Job? = null
+                var active = true
                 try {
                     app.downloads.runQueue { s ->
-                        lifecycleScope.launch {
-                            Notifications.update(this@DownloadService, s, app.db.queue().all().size)
+                        refresh?.cancel()
+                        refresh = lifecycleScope.launch {
+                            val remaining = app.db.queue().all().size
+                            if (active) Notifications.update(this@DownloadService, s, remaining)
                         }
                     }
                 } finally {
+                    active = false
+                    refresh?.cancel()
                     running = false
                     ServiceCompat.stopForeground(this@DownloadService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    Notifications.cancelWork(this@DownloadService)
                     stopSelf()
                 }
             }
