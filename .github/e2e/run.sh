@@ -52,6 +52,12 @@ tap() {
   log "NOT FOUND: '$1'"; return 1
 }
 
+diagnose() { # print what's on screen and recent app errors into the job log
+  log "focus: $(A shell dumpsys window | grep -m1 -E 'mCurrentFocus' | tr -d '\r')"
+  log "dump errors: $(tail -2 "$OUT/dump_errors.txt" 2>/dev/null | tr '\n' ' ')"
+  A logcat -d -v brief '*:E' | grep -iE 'epubforge|AndroidRuntime|FATAL' | tail -15 | while read -r l; do log "logcat: ${l:0:220}"; done
+  [ -f "$OUT/ui.xml" ] && log "screen texts: $(grep -oE 'text="[^"]+"' "$OUT/ui.xml" | head -12 | tr '\n' ' ' | cut -c1-400)"
+}
 wait_for() { # regex, seconds
   local end=$((SECONDS + $2))
   while [ $SECONDS -lt $end ]; do
@@ -59,7 +65,9 @@ wait_for() { # regex, seconds
     if find_node "Verify you're human|Verification needed" >/dev/null; then log "VERIFICATION PAGE SHOWN"; shot verification; fi
     sleep 3
   done
-  log "TIMEOUT waiting for '$1'"; return 1
+  log "TIMEOUT waiting for '$1'"
+  diagnose
+  return 1
 }
 
 adb logcat -c
