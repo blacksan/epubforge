@@ -67,13 +67,18 @@ class NativeProxy(
 
     private class Result(val code: Int, val message: String, val headers: Headers, val body: ByteArray, val finalUrl: String)
 
+    private val PAGE_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+    private val IMAGE_ACCEPT = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+    private val IMAGE_PATH = Regex("\\.(png|jpe?g|gif|webp|avif|bmp|svg)$", RegexOption.IGNORE_CASE)
     private val dropRequestHeaders = setOf("accept-encoding", "host", "content-length", "cookie", "connection", "user-agent")
     private val keepResponseHeaders = setOf("retry-after", "last-modified", "etag", "content-disposition", "content-language")
 
     private fun execute(spec: Spec): Result {
         val builder = Request.Builder().url(spec.url)
             .header("User-Agent", userAgent)
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            // Pages get a browser's page Accept header; image URLs get an image one (hosts like Imgur
+            // send their HTML viewer page instead of the picture to requests that prefer HTML).
+            .header("Accept", if (IMAGE_PATH.containsMatchIn(spec.url.substringBefore('?').substringBefore('#'))) IMAGE_ACCEPT else PAGE_ACCEPT)
             .header("Accept-Language", "en-US,en;q=0.9")
         spec.headers.forEach { (k, v) -> if (k.lowercase() !in dropRequestHeaders) builder.header(k, v) }
         val method = spec.method.uppercase()

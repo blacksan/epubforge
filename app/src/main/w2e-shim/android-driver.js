@@ -80,6 +80,31 @@
         };
     }
 
+    // Ask for images when fetching images. The default Accept header (a browser's, for pages) makes
+    // some image hosts, Imgur in particular, answer with an HTML viewer page instead of the picture;
+    // WebToEpub then fetches the same URL again and stores HTML as the "image".
+    const IMAGE_ACCEPT = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+    const IMAGE_PATH = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+    function patchImageFetches() {
+        if (typeof HttpClient === "undefined" || HttpClient.__w2eImagePatched) { return; }
+        HttpClient.__w2eImagePatched = true;
+        const original = HttpClient.wrapFetch;
+        HttpClient.wrapFetch = function (url, wrapOptions) {
+            let path = "";
+            try { path = new URL(url).pathname; } catch (e) { /* relative or invalid: leave as is */ }
+            const forImage = (typeof FetchImageErrorHandler !== "undefined" && wrapOptions?.errorHandler instanceof FetchImageErrorHandler)
+                || IMAGE_PATH.test(path);
+            if (forImage) {
+                wrapOptions = wrapOptions || {};
+                const base = wrapOptions.fetchOptions || HttpClient.makeOptions();
+                wrapOptions.fetchOptions = Object.assign({}, base, {
+                    headers: Object.assign({}, base.headers || {}, { "Accept": IMAGE_ACCEPT }),
+                });
+            }
+            return original.call(this, url, wrapOptions);
+        };
+    }
+
     function val(id) {
         const el = document.getElementById(id);
         return el ? String(el.value !== undefined ? el.value : el.textContent || "").trim() : "";
@@ -107,6 +132,7 @@
     async function analyseStory(url, opts) {
         patchErrorLog();
         patchImageCollector();
+        patchImageFetches();
         state.errors = [];
         state.retries = new Map();
         state.maxRetries = opts.maxRetries || 4;
@@ -268,6 +294,7 @@
     window.addEventListener("load", () => {
         patchErrorLog();
         patchImageCollector();
+        patchImageFetches();
         setTimeout(() => {
             let version = "";
             try { version = chrome.runtime.getManifest().version || ""; } catch (e) { /* ignore */ }
