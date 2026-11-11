@@ -52,6 +52,9 @@ tap() {
   log "NOT FOUND: '$1'"; return 1
 }
 
+dismiss_anr() {
+  if find_node ".*isn't responding" >/dev/null; then log "system 'isn't responding' dialog: tapping Wait"; tap "Wait"; sleep 2; fi
+}
 diagnose() { # print what's on screen and recent app errors into the job log
   log "focus: $(A shell dumpsys window | grep -m1 -E 'mCurrentFocus' | tr -d '\r')"
   log "dump errors: $(tail -2 "$OUT/dump_errors.txt" 2>/dev/null | tr '\n' ' ')"
@@ -63,6 +66,7 @@ wait_for() { # regex, seconds
   while [ $SECONDS -lt $end ]; do
     if find_node "$1" >/dev/null; then log "found '$1' after $(( $2 - (end - SECONDS) ))s"; return 0; fi
     if find_node "Verify you're human|Verification needed" >/dev/null; then log "VERIFICATION PAGE SHOWN"; shot verification; fi
+    dismiss_anr
     sleep 3
   done
   log "TIMEOUT waiting for '$1'"
@@ -80,6 +84,9 @@ adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
 adb shell cmd overlay enable com.android.internal.display.cutout.emulation.hole >/dev/null 2>&1 || true
 sleep 2
 log "display cutout: $(adb shell dumpsys display | grep -m1 -oE 'DisplayCutout\{[^}]*\}' | head -c 200)"
+# The emulator's own apps sometimes freeze on a slow runner, and their "isn't responding" dialog then
+# covers everything. Hide such dialogs, and tap "Wait" if one still shows (see dismiss_anr).
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
 # Skip Android's one-time "Viewing full screen" tip so it doesn't cover the reader.
 adb shell settings put secure immersive_mode_confirmations confirmed || true
 adb shell wm size | tee -a "$OUT/steps.txt"
